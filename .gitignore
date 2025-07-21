@@ -1,0 +1,46 @@
+# Entornos virtuales
+venv/
+.env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de configuración sensibles
+env_example.txt
+.env
+*.env
+
+# Archivos de logs y bases de datos
+*.log
+*.sqlite3
+*.db
+
+# Archivos de usuario y sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Archivos de pruebas y resultados temporales
+*.tmp
+*.bak
+*.old
+
+# Archivos de Jupyter y notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Archivos de VSCode y otros editores
+.vscode/
+.idea/
+*.code-workspace
+
+# Archivos de distribución y empaquetado
+dist/
+build/
+*.egg-info/
+
+# Otros
+# Puedes agregar aquí cualquier otro patrón específico de tu proyecto 
