@@ -35,7 +35,7 @@ flowchart TD
 
 1. **Clonar el repositorio:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/DSInteg/example-customer-support-bo
 cd test-bot
 ```
 
