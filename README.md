@@ -1,6 +1,6 @@
 # LangGraph Customer Support Chatbot
 
-> **Ejercicio realizado por la consultora [DSInteg](https://dsinteg.com) basado en el tutorial oficial de LangGraph Customer Support Chatbot.**
+> **Ejercicio realizado por la consultora [DSInteg](https://dsinteg.com) basado en el tutorial oficial de LangGraph [Build a Customer Support Bot](https://langchain-ai.github.io/langgraph/tutorials/customer-support/customer-support/).**
 
 ---
 
