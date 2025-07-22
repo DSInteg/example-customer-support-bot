@@ -127,7 +127,7 @@ tools = [search_knowledge_base, create_support_ticket, check_order_status, get_c
 
 # Definir nodos del agente
 def call_model(state: AgentState) -> AgentState:
-    """Call the LLM to generate a response."""
+    """Call the LLM to generate a response and handle tools internally."""
     messages = state["messages"]
     
     # Crear template de prompt usando configuración
@@ -148,6 +148,48 @@ def call_model(state: AgentState) -> AgentState:
     
     # Agregar respuesta a los mensajes
     new_messages = list(messages) + [response]
+    
+    # Si hay llamadas a herramientas, ejecutarlas internamente
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            
+            logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
+            
+            # Encontrar y ejecutar la herramienta
+            tool_func = None
+            for tool in tools:
+                if tool.name == tool_name:
+                    tool_func = tool
+                    break
+            
+            if tool_func:
+                try:
+                    result = tool_func.invoke(tool_args)
+                    # Agregar resultado de herramienta a mensajes
+                    new_messages.append(ToolMessage(
+                        content=str(result),
+                        tool_call_id=tool_call["id"]
+                    ))
+                    
+                    # Actualizar contador de uso de herramientas
+                    if "tool_usage_count" not in state:
+                        state["tool_usage_count"] = {}
+                    state["tool_usage_count"][tool_name] = state["tool_usage_count"].get(tool_name, 0) + 1
+                    
+                except Exception as e:
+                    logger.error(f"Error executing tool {tool_name}: {e}")
+                    new_messages.append(ToolMessage(
+                        content=f"Error executing {tool_name}: {str(e)}",
+                        tool_call_id=tool_call["id"]
+                    ))
+            else:
+                logger.error(f"Tool {tool_name} not found")
+                new_messages.append(ToolMessage(
+                    content=f"Tool {tool_name} not found",
+                    tool_call_id=tool_call["id"]
+                ))
     
     logger.info(f"LLM response generated for message: {messages[-1].content[:50]}...")
     
@@ -221,42 +263,20 @@ def generate_summary(state: AgentState) -> AgentState:
     
     return {"conversation_summary": summary.content}
 
-# Crear workflow usando la API moderna de LangGraph
+# Crear workflow simplificado
 workflow = StateGraph(AgentState)
 
-# Agregar nodos
+# Agregar solo el nodo principal
 workflow.add_node("agent", call_model)
-workflow.add_node("tools", call_tool)
-workflow.add_node("summary", generate_summary)
 
 # Definir punto de entrada
 workflow.set_entry_point("agent")
 
-# Agregar edges condicionales directamente
-workflow.add_conditional_edges(
-    "agent",
-    lambda state: "end" if any(phrase in state["messages"][-1].content.lower() 
-                              for phrase in config["ui"]["exit_commands"]) else "continue",
-    {
-        "continue": "tools",
-        "end": "summary"
-    }
-)
+# Agregar edge directo al final
+workflow.add_edge("agent", END)
 
-# Agregar edge condicional desde tools para evitar bucle infinito
-workflow.add_conditional_edges(
-    "tools",
-    lambda state: "end" if any(phrase in state["messages"][-1].content.lower() 
-                              for phrase in config["ui"]["exit_commands"]) else "agent",
-    {
-        "agent": "agent",
-        "end": "summary"
-    }
-)
-workflow.add_edge("summary", END)
-
-# Compilar grafo con límite de recursión
-app = workflow.compile(checkpointer=None)
+# Compilar grafo
+app = workflow.compile()
 
 # Función para ejecutar el chatbot
 def run_chatbot():

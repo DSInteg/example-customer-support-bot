@@ -143,7 +143,7 @@ def should_continue(state: AgentState) -> str:
     return "continue"
 
 def call_model(state: AgentState) -> AgentState:
-    """Call the LLM to generate a response."""
+    """Call the LLM to generate a response and handle tools internally."""
     messages = state["messages"]
     
     # Crear template de prompt usando configuración
@@ -164,6 +164,42 @@ def call_model(state: AgentState) -> AgentState:
     
     # Agregar respuesta a los mensajes
     new_messages = list(messages) + [response]
+    
+    # Si hay llamadas a herramientas, ejecutarlas internamente
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            
+            logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
+            
+            # Encontrar y ejecutar la herramienta
+            tool_func = None
+            for tool in tools:
+                if tool.name == tool_name:
+                    tool_func = tool
+                    break
+            
+            if tool_func:
+                try:
+                    result = tool_func.invoke(tool_args)
+                except Exception as e:
+                    logger.error(f"Error executing tool {tool_name}: {e}")
+                    result = f"Error executing {tool_name}: {str(e)}"
+            else:
+                logger.error(f"Tool {tool_name} not found")
+                result = f"Tool {tool_name} not found"
+            
+            # Agregar resultado de herramienta a mensajes
+            new_messages.append(ToolMessage(
+                content=str(result),
+                tool_call_id=tool_call["id"]
+            ))
+            
+            # Actualizar contador de uso de herramientas
+            if "tool_usage_count" not in state:
+                state["tool_usage_count"] = {}
+            state["tool_usage_count"][tool_name] = state["tool_usage_count"].get(tool_name, 0) + 1
     
     logger.info(f"LLM response generated for message: {messages[-1].content[:50]}...")
     
@@ -231,28 +267,17 @@ def generate_summary(state: AgentState) -> AgentState:
     
     return {"conversation_summary": summary.content}
 
-# Crear workflow
+# Crear workflow simplificado
 workflow = StateGraph(AgentState)
 
-# Agregar nodos
+# Agregar solo el nodo principal
 workflow.add_node("agent", call_model)
-workflow.add_node("tools", call_tool)
-workflow.add_node("summary", generate_summary)
-
-# Agregar edges
-workflow.add_conditional_edges(
-    "agent",
-    should_continue,
-    {
-        "continue": "tools",
-        "end": "summary"
-    }
-)
-workflow.add_edge("tools", "agent")
-workflow.add_edge("summary", END)
 
 # Definir punto de entrada
 workflow.set_entry_point("agent")
+
+# Agregar edge directo al final
+workflow.add_edge("agent", END)
 
 # Compilar grafo
 app = workflow.compile()

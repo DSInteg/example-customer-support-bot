@@ -149,7 +149,7 @@ def should_continue(state: AgentState) -> str:
     return "continue"
 
 def call_model(state: AgentState) -> AgentState:
-    """Call the LLM to generate a response."""
+    """Call the LLM to generate a response and handle tools internally."""
     messages = state["messages"]
     
     # Create the prompt template
@@ -192,6 +192,38 @@ def call_model(state: AgentState) -> AgentState:
     
     # Add response to messages
     new_messages = list(messages) + [response]
+    
+    # If there are tool calls, execute them internally
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            
+            # Find and execute the tool
+            tool_func = None
+            for tool in tools:
+                if tool.name == tool_name:
+                    tool_func = tool
+                    break
+            
+            if tool_func:
+                try:
+                    result = tool_func.invoke(tool_args)
+                    # Add tool result to messages
+                    new_messages.append(ToolMessage(
+                        content=str(result),
+                        tool_call_id=tool_call["id"]
+                    ))
+                except Exception as e:
+                    new_messages.append(ToolMessage(
+                        content=f"Error executing {tool_name}: {str(e)}",
+                        tool_call_id=tool_call["id"]
+                    ))
+            else:
+                new_messages.append(ToolMessage(
+                    content=f"Tool {tool_name} not found",
+                    tool_call_id=tool_call["id"]
+                ))
     
     return {"messages": new_messages}
 
@@ -244,16 +276,7 @@ workflow.add_node("agent", call_model)
 workflow.add_node("tools", call_tool)
 
 # Add edges
-workflow.add_conditional_edges(
-    "agent",
-    lambda state: "end" if any(phrase in state["messages"][-1].content.lower() 
-                              for phrase in ["goodbye", "bye", "end", "stop", "thank you", "thanks", "quit", "exit"]) else "continue",
-    {
-        "continue": "tools",
-        "end": END
-    }
-)
-workflow.add_edge("tools", "agent")
+workflow.add_edge("agent", END)
 
 # Set entry point
 workflow.set_entry_point("agent")
