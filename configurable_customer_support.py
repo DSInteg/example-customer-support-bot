@@ -240,7 +240,6 @@ workflow.add_node("tools", call_tool)
 workflow.add_node("summary", generate_summary)
 
 # Agregar edges
-workflow.add_edge("agent", should_continue)
 workflow.add_conditional_edges(
     "agent",
     should_continue,

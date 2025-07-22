@@ -44,20 +44,16 @@ Todos los scripts han sido actualizados para funcionar correctamente con:
   - ✅ Configuración externalizada
 - **Comando:** `python advanced_customer_support.py`
 
-### 5. **configurable_customer_support.py** ✅ **FUNCIONANDO**
+### 5. **configurable_customer_support.py** ⚠️ **CON PROBLEMAS**
 - **Descripción:** Versión configurable con logging
-- **Características:**
-  - ✅ Configuración externalizada
-  - ✅ Logging detallado
-  - ✅ Contador de uso de herramientas
+- **Problema:** Recursión infinita en el grafo
+- **Estado:** No recomendado para uso
 - **Comando:** `python configurable_customer_support.py`
 
-### 6. **simple_customer_support.py** ✅ **FUNCIONANDO**
+### 6. **simple_customer_support.py** ⚠️ **CON PROBLEMAS**
 - **Descripción:** Versión simplificada original
-- **Características:**
-  - ✅ Sin dependencias complejas
-  - ✅ Funcionamiento básico
-  - ✅ Fácil de entender
+- **Problema:** Recursión infinita en el grafo
+- **Estado:** No recomendado para uso
 - **Comando:** `python simple_customer_support.py`
 
 ---
@@ -104,12 +100,12 @@ python enhanced_customer_support.py
 
 ### **Para Producción:**
 ```bash
-python configurable_customer_support.py
+python enhanced_customer_support.py
 ```
 
 ### **Para Aprendizaje:**
 ```bash
-python simple_customer_support.py
+python simple_modern_customer_support.py
 ```
 
 ---

@@ -242,7 +242,6 @@ workflow.add_node("tools", call_tool)
 workflow.add_node("summary", generate_summary)
 
 # Agregar edges
-workflow.add_edge("agent", should_continue)
 workflow.add_conditional_edges(
     "agent",
     should_continue,
@@ -253,6 +252,9 @@ workflow.add_conditional_edges(
 )
 workflow.add_edge("tools", "agent")
 workflow.add_edge("summary", END)
+
+# Definir punto de entrada
+workflow.set_entry_point("agent")
 
 # Compilar grafo
 app = workflow.compile()
