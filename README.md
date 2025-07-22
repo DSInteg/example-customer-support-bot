@@ -39,15 +39,29 @@ git clone https://github.com/DSInteg/example-customer-support-bot
 cd test-bot
 ```
 
-2. **Instalar dependencias:**
+2. **Crear y activar entorno virtual:**
+```bash
+# Crear entorno virtual
+python3 -m venv venv
+
+# Activar entorno virtual
+source venv/bin/activate
+```
+
+3. **Instalar dependencias:**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Configurar variables de entorno:**
+4. **Configurar variables de entorno:**
 Crear un archivo `.env` en la raíz del proyecto:
 ```env
 OPENAI_API_KEY=tu_api_key_de_openai_aqui
+```
+
+5. **Verificar instalación:**
+```bash
+python test_customer_bot.py
 ```
 
 ## 🚀 Uso
@@ -60,6 +74,16 @@ python customer_support_bot.py
 ### Versión Avanzada
 ```bash
 python advanced_customer_support.py
+```
+
+### Versión Simplificada
+```bash
+python simple_customer_support.py
+```
+
+### Versión Moderna (Recomendada - LangGraph 0.5.x)
+```bash
+python modern_customer_support.py
 ```
 
 ## 📚 Ejemplos de Uso
@@ -192,6 +216,43 @@ print(result['messages'][-1].content)
 ModuleNotFoundError: No module named 'langgraph'
 ```
 **Solución**: Instalar dependencias con `pip install -r requirements.txt`.
+
+### Error: ImportError con ToolExecutor
+```
+ImportError: cannot import name 'ToolExecutor' from 'langgraph.prebuilt'
+```
+**Solución**: 
+1. Ejecutar script de configuración: `bash setup_environment.sh`
+2. O manualmente:
+   ```bash
+   # Asegúrate de estar en el entorno virtual
+   source venv/bin/activate
+   
+   # Limpiar paquetes conflictivos
+   pip uninstall -y langgraph langchain langchain-openai langchain-community langchain-core langchain-text-splitters langgraph-prebuilt
+   pip cache purge
+   pip install -r requirements.txt
+   python test_imports.py
+   ```
+
+### Error: Conflictos de dependencias
+```
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed.
+```
+**Solución**: Usar el script de instalación completo: `bash install_dependencies.sh`
+
+### Error: Módulos faltantes
+```
+No module named 'langchain-core'
+No module named 'langchain-openai'
+```
+**Solución**: Ejecutar el script de instalación: `bash install_dependencies.sh`
+
+### Error: Grafo sin punto de entrada
+```
+Graph must have an entrypoint: add at least one edge from START to another node
+```
+**Solución**: Ya corregido en la versión simplificada. Usar: `python simple_customer_support.py`
 
 ### Error: Modelo no disponible
 ```

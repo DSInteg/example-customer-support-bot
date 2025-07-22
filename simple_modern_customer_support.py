@@ -1,16 +1,15 @@
 """
-Customer Support Chatbot Configurable
-Versión que utiliza configuración externalizada para mejor mantenibilidad
+Customer Support Chatbot - Versión Moderna Simplificada
+Usando LangGraph 0.5.x con lógica simplificada para evitar recursión
 """
 
 import os
-from typing import TypedDict, Annotated, Sequence
+from typing import TypedDict, Annotated, Sequence, List, Dict, Any
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
-
 from langchain.tools import tool
 import json
 import logging
@@ -41,7 +40,6 @@ logger = logging.getLogger(__name__)
 # Definir el estado del agente
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
-    next: str
     customer_info: dict
     conversation_summary: str
     tool_usage_count: dict
@@ -54,8 +52,7 @@ env_config = get_environment_config()
 llm = ChatOpenAI(
     model=env_config["model"],
     temperature=env_config["temperature"],
-    api_key=env_config["openai_api_key"],
-    max_tokens=1000
+    api_key=env_config["openai_api_key"]
 )
 
 # Definir herramientas usando configuración
@@ -127,24 +124,19 @@ def get_customer_info(customer_email: str) -> str:
 # Crear lista de herramientas
 tools = [search_knowledge_base, create_support_ticket, check_order_status, get_customer_info]
 
-# Definir nodos del agente
-def should_continue(state: AgentState) -> str:
-    """Determine if the conversation should continue or end."""
+# Definir nodo principal del agente
+def call_model(state: AgentState) -> AgentState:
+    """Call the LLM to generate a response."""
     messages = state["messages"]
-    last_message = messages[-1]
     
+    # Verificar si el usuario quiere salir
+    last_message = messages[-1]
     if isinstance(last_message, HumanMessage):
         content = last_message.content.lower()
         exit_commands = config["ui"]["exit_commands"]
         if any(phrase in content for phrase in exit_commands):
             logger.info("Conversation ending - user requested exit")
-            return "end"
-    
-    return "continue"
-
-def call_model(state: AgentState) -> AgentState:
-    """Call the LLM to generate a response."""
-    messages = state["messages"]
+            return {"conversation_summary": "User requested to end the conversation."}
     
     # Crear template de prompt usando configuración
     prompt = ChatPromptTemplate.from_messages([
@@ -153,7 +145,7 @@ def call_model(state: AgentState) -> AgentState:
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ])
     
-    # Crear agente
+    # Crear agente con herramientas
     agent = prompt | llm.bind_tools(tools)
     
     # Obtener respuesta
@@ -167,101 +159,69 @@ def call_model(state: AgentState) -> AgentState:
     
     logger.info(f"LLM response generated for message: {messages[-1].content[:50]}...")
     
+    # Si hay llamadas a herramientas, ejecutarlas
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            
+            logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
+            
+            # Encontrar y ejecutar la herramienta
+            tool_func = None
+            for tool in tools:
+                if tool.name == tool_name:
+                    tool_func = tool
+                    break
+            
+            if tool_func:
+                try:
+                    result = tool_func.invoke(tool_args)
+                    # Agregar resultado de herramienta a mensajes
+                    new_messages.append(ToolMessage(
+                        content=str(result),
+                        tool_call_id=tool_call["id"]
+                    ))
+                    
+                    # Actualizar contador de uso de herramientas
+                    if "tool_usage_count" not in state:
+                        state["tool_usage_count"] = {}
+                    state["tool_usage_count"][tool_name] = state["tool_usage_count"].get(tool_name, 0) + 1
+                    
+                except Exception as e:
+                    logger.error(f"Error executing tool {tool_name}: {e}")
+                    new_messages.append(ToolMessage(
+                        content=f"Error executing {tool_name}: {str(e)}",
+                        tool_call_id=tool_call["id"]
+                    ))
+            else:
+                logger.error(f"Tool {tool_name} not found")
+                new_messages.append(ToolMessage(
+                    content=f"Tool {tool_name} not found",
+                    tool_call_id=tool_call["id"]
+                ))
+    
     return {"messages": new_messages}
 
-def call_tool(state: AgentState) -> AgentState:
-    """Call a tool and add the result to the messages."""
-    messages = state["messages"]
-    last_message = messages[-1]
-    
-    # Extraer llamadas a herramientas del último mensaje
-    tool_calls = last_message.tool_calls
-    
-    # Ejecutar cada llamada a herramienta
-    for tool_call in tool_calls:
-        tool_name = tool_call["name"]
-        tool_args = tool_call["args"]
-        
-        logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
-        
-        # Encontrar y ejecutar la herramienta
-        tool_func = None
-        for tool in tools:
-            if tool.name == tool_name:
-                tool_func = tool
-                break
-        
-        if tool_func:
-            try:
-                result = tool_func.invoke(tool_args)
-            except Exception as e:
-                logger.error(f"Error executing tool {tool_name}: {e}")
-                result = f"Error executing {tool_name}: {str(e)}"
-        else:
-            logger.error(f"Tool {tool_name} not found")
-            result = f"Tool {tool_name} not found"
-        
-        # Agregar resultado de herramienta a mensajes
-        messages.append(ToolMessage(
-            content=str(result),
-            tool_call_id=tool_call["id"]
-        ))
-        
-        # Actualizar contador de uso de herramientas
-        if "tool_usage_count" not in state:
-            state["tool_usage_count"] = {}
-        state["tool_usage_count"][tool_name] = state["tool_usage_count"].get(tool_name, 0) + 1
-    
-    return {"messages": messages}
-
-def generate_summary(state: AgentState) -> AgentState:
-    """Generate a summary of the conversation when ending."""
-    messages = state["messages"]
-    
-    # Crear prompt de resumen usando configuración
-    summary_prompt = ChatPromptTemplate.from_messages([
-        ("system", SYSTEM_PROMPTS["summary"]),
-        MessagesPlaceholder(variable_name="messages")
-    ])
-    
-    summary_chain = summary_prompt | llm
-    summary = summary_chain.invoke({"messages": messages})
-    
-    logger.info("Conversation summary generated")
-    
-    return {"conversation_summary": summary.content}
-
-# Crear workflow
+# Crear workflow simplificado
 workflow = StateGraph(AgentState)
 
-# Agregar nodos
+# Agregar nodo principal
 workflow.add_node("agent", call_model)
-workflow.add_node("tools", call_tool)
-workflow.add_node("summary", generate_summary)
-
-# Agregar edges
-workflow.add_edge("agent", should_continue)
-workflow.add_conditional_edges(
-    "agent",
-    should_continue,
-    {
-        "continue": "tools",
-        "end": "summary"
-    }
-)
-workflow.add_edge("tools", "agent")
-workflow.add_edge("summary", END)
 
 # Definir punto de entrada
 workflow.set_entry_point("agent")
+
+# Agregar edge directo al final
+workflow.add_edge("agent", END)
 
 # Compilar grafo
 app = workflow.compile()
 
 # Función para ejecutar el chatbot
 def run_chatbot():
-    """Ejecutar el chatbot de soporte al cliente configurable."""
-    print(f"{config['ui']['welcome_message']} (Configurable - LangGraph 0.5.x)")
+    """Ejecutar el chatbot de soporte al cliente moderno simplificado."""
+    print(f"{config['ui']['welcome_message']} (Versión Moderna Simplificada - LangGraph 0.5.x)")
     print("Type 'quit' to exit")
     print("=" * 60)
     print("I can help you with:")
@@ -331,5 +291,5 @@ if __name__ == "__main__":
         print("Please create a .env file with your OpenAI API key:")
         print("OPENAI_API_KEY=your_api_key_here")
     else:
-        logger.info("Starting configurable customer support chatbot")
+        logger.info("Starting simplified modern customer support chatbot")
         run_chatbot() 

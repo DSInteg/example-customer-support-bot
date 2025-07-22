@@ -1,16 +1,15 @@
 """
-Customer Support Chatbot Configurable
-Versión que utiliza configuración externalizada para mejor mantenibilidad
+Customer Support Chatbot - Versión Simplificada
+Sin dependencia de ToolExecutor para evitar problemas de importación
 """
 
 import os
-from typing import TypedDict, Annotated, Sequence
+from typing import TypedDict, Annotated, Sequence, List, Dict, Any
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
-
 from langchain.tools import tool
 import json
 import logging
@@ -54,8 +53,7 @@ env_config = get_environment_config()
 llm = ChatOpenAI(
     model=env_config["model"],
     temperature=env_config["temperature"],
-    api_key=env_config["openai_api_key"],
-    max_tokens=1000
+    api_key=env_config["openai_api_key"]
 )
 
 # Definir herramientas usando configuración
@@ -124,8 +122,26 @@ def get_customer_info(customer_email: str) -> str:
         logger.warning(f"Customer not found: {customer_email}")
         return f"No customer record found for {customer_email}. Please verify the email address."
 
-# Crear lista de herramientas
-tools = [search_knowledge_base, create_support_ticket, check_order_status, get_customer_info]
+# Crear diccionario de herramientas para uso directo
+tools_dict = {
+    "search_knowledge_base": search_knowledge_base,
+    "create_support_ticket": create_support_ticket,
+    "check_order_status": check_order_status,
+    "get_customer_info": get_customer_info
+}
+
+def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
+    """Ejecutar una herramienta directamente sin ToolExecutor."""
+    if tool_name in tools_dict:
+        try:
+            tool_func = tools_dict[tool_name]
+            result = tool_func.invoke(tool_args)
+            return str(result)
+        except Exception as e:
+            logger.error(f"Error executing tool {tool_name}: {e}")
+            return f"Error executing {tool_name}: {str(e)}"
+    else:
+        return f"Tool {tool_name} not found"
 
 # Definir nodos del agente
 def should_continue(state: AgentState) -> str:
@@ -154,7 +170,7 @@ def call_model(state: AgentState) -> AgentState:
     ])
     
     # Crear agente
-    agent = prompt | llm.bind_tools(tools)
+    agent = prompt | llm.bind_tools(list(tools_dict.values()))
     
     # Obtener respuesta
     response = agent.invoke({
@@ -184,22 +200,8 @@ def call_tool(state: AgentState) -> AgentState:
         
         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
         
-        # Encontrar y ejecutar la herramienta
-        tool_func = None
-        for tool in tools:
-            if tool.name == tool_name:
-                tool_func = tool
-                break
-        
-        if tool_func:
-            try:
-                result = tool_func.invoke(tool_args)
-            except Exception as e:
-                logger.error(f"Error executing tool {tool_name}: {e}")
-                result = f"Error executing {tool_name}: {str(e)}"
-        else:
-            logger.error(f"Tool {tool_name} not found")
-            result = f"Tool {tool_name} not found"
+        # Ejecutar herramienta usando nuestra función personalizada
+        result = execute_tool(tool_name, tool_args)
         
         # Agregar resultado de herramienta a mensajes
         messages.append(ToolMessage(
@@ -252,16 +254,13 @@ workflow.add_conditional_edges(
 workflow.add_edge("tools", "agent")
 workflow.add_edge("summary", END)
 
-# Definir punto de entrada
-workflow.set_entry_point("agent")
-
 # Compilar grafo
 app = workflow.compile()
 
 # Función para ejecutar el chatbot
 def run_chatbot():
-    """Ejecutar el chatbot de soporte al cliente configurable."""
-    print(f"{config['ui']['welcome_message']} (Configurable - LangGraph 0.5.x)")
+    """Ejecutar el chatbot de soporte al cliente simplificado."""
+    print(f"{config['ui']['welcome_message']} (Versión Simplificada)")
     print("Type 'quit' to exit")
     print("=" * 60)
     print("I can help you with:")
@@ -331,5 +330,5 @@ if __name__ == "__main__":
         print("Please create a .env file with your OpenAI API key:")
         print("OPENAI_API_KEY=your_api_key_here")
     else:
-        logger.info("Starting configurable customer support chatbot")
+        logger.info("Starting simplified customer support chatbot")
         run_chatbot() 

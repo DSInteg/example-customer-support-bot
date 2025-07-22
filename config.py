@@ -8,8 +8,8 @@ from typing import Dict, Any
 
 # Configuración del modelo de lenguaje
 LLM_CONFIG = {
-    "model": "gpt-3.5-turbo",
-    "temperature": 0,
+    "model": "gpt-4o-mini",  # Mejor relación calidad-precio para soporte al cliente
+    "temperature": 0.7,      # Balance entre creatividad y precisión
     "max_tokens": 1000
 }
 
@@ -178,9 +178,18 @@ def get_config() -> Dict[str, Any]:
 
 def get_environment_config() -> Dict[str, Any]:
     """Obtiene configuración basada en variables de entorno."""
+    # Asegurar que temperature esté en el rango válido (0-2)
+    try:
+        temp = float(os.getenv("LLM_TEMPERATURE", str(LLM_CONFIG["temperature"])))
+        # Validar que temperature esté en el rango correcto
+        if temp < 0 or temp > 2:
+            temp = LLM_CONFIG["temperature"]  # Usar valor por defecto si está fuera de rango
+    except (ValueError, TypeError):
+        temp = LLM_CONFIG["temperature"]  # Usar valor por defecto si hay error
+    
     return {
         "openai_api_key": os.getenv("OPENAI_API_KEY"),
         "model": os.getenv("LLM_MODEL", LLM_CONFIG["model"]),
-        "temperature": float(os.getenv("LLM_TEMPERATURE", str(LLM_CONFIG["temperature"]))),
+        "temperature": temp,
         "debug_mode": os.getenv("DEBUG_MODE", "False").lower() == "true"
     } 
